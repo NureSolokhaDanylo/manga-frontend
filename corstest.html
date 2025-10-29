@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>MangaDex CORS test</title>
+    <style>
+      body{font-family:Segoe UI,Arial,Helvetica,sans-serif;margin:24px}
+      button{margin-right:8px}
+      pre{background:#f7f7f7;border:1px solid #ddd;padding:12px;white-space:pre-wrap}
+      .ok{color:green}
+      .err{color:#b33}
+    </style>
+  </head>
+  <body>
+    <h1>MangaDex API CORS тест</h1>
+    <p>Эта страница проверяет, разрешает ли MangaDex прямые запросы из браузера (CORS).</p>
+
+    <p>
+      <button id="btnDirect">Прямой fetch (mode: 'cors')</button>
+      <button id="btnNoCors">fetch (mode: 'no-cors')</button>
+      <button id="btnProxy">Через CORS-прокси (allorigins)</button>
+      <button id="btnClear">Очистить лог</button>
+    </p>
+
+    <div>
+      <strong>Endpoint:</strong>
+      <input id="endpoint" style="width:60%" value="https://api.mangadex.org/manga?limit=1" />
+    </div>
+
+    <h3>Лог тестов</h3>
+    <div id="log"></div>
+
+    <script>
+      const $ = id => document.getElementById(id);
+      const logEl = $('log');
+
+      function log(title, obj, cls){
+        const el = document.createElement('div');
+        el.innerHTML = `<strong>${title}</strong>`;
+        const pre = document.createElement('pre');
+        pre.className = cls||'';
+        try{ pre.textContent = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2); }catch(e){ pre.textContent = String(obj); }
+        el.appendChild(pre);
+        logEl.prepend(el);
+      }
+
+      async function testDirect(){
+        const url = $('endpoint').value.trim();
+        log('Прямой запрос (mode: cors) -> ' + url, 'Начинаю запрос...');
+        try{
+          const res = await fetch(url, { method: 'GET', mode: 'cors', credentials: 'omit' });
+          log('Статус ответа (direct)', { status: res.status, type: res.type, ok: res.ok });
+          // try to parse JSON if allowed
+          try{
+            const body = await res.json();
+            log('Response JSON (direct)', body, 'ok');
+          }catch(e){
+            log('Не удалось прочитать тело (direct) — вероятно CORS / opaque response', String(e), 'err');
+          }
+        }catch(err){
+          log('Ошибка fetch (direct) — возможен блок CORS или сетевая ошибка', String(err), 'err');
+        }
+      }
+
+      async function testNoCors(){
+        const url = $('endpoint').value.trim();
+        log('Запрос mode: no-cors -> ' + url, 'Начинаю запрос...');
+        try{
+          const res = await fetch(url, { method: 'GET', mode: 'no-cors', credentials: 'omit' });
+          log('Результат (no-cors)', { status: res.status, type: res.type, ok: res.ok });
+          log('Примечание', 'При mode: no-cors тело ответа недоступно (opaque). Если такой запрос "успешен", сервер отвечает, но CORS запрещает чтение.');
+        }catch(err){
+          log('Ошибка fetch (no-cors)', String(err), 'err');
+        }
+      }
+
+      async function testProxy(){
+        const url = $('endpoint').value.trim();
+        // Using AllOrigins as a public CORS proxy to demonstrate a workaround for testing.
+        const proxy = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
+        log('Запрос через CORS-прокси -> ' + proxy, 'Начинаю запрос через прокси...');
+        try{
+          const res = await fetch(proxy, { method: 'GET' });
+          log('Статус ответа (proxy)', { status: res.status, type: res.type, ok: res.ok });
+          try{
+            const body = await res.text();
+            log('Response text (proxy) — первые 2000 символов', body.slice(0,2000));
+          }catch(e){
+            log('Не удалось прочитать тело (proxy)', String(e), 'err');
+          }
+        }catch(err){
+          log('Ошибка fetch (proxy)', String(err), 'err');
+        }
+      }
+
+      $('btnDirect').addEventListener('click', testDirect);
+      $('btnNoCors').addEventListener('click', testNoCors);
+      $('btnProxy').addEventListener('click', testProxy);
+      $('btnClear').addEventListener('click', ()=> logEl.innerHTML='');
+
+      // Auto-run direct test on load for convenience
+      window.addEventListener('load', ()=> setTimeout(testDirect, 300));
+    </script>
+  </body>
+</html>
